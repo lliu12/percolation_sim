@@ -10,18 +10,19 @@ from matplotlib import cm
 from simulation import Simulation
 
 
-auto = True # automatically rigidify tiles
+auto = False # automatically rigidify tiles
 
 DISPLAY_SIZE = (500,500)
 w,h = DISPLAY_SIZE
 
-rows = 25
-cols = 25
+rows = 15
+cols = 15
 s = 15
 
-learn_locations = False
-explosive_k = 1
-selection = np.argmax
+learn_locations = True
+select_tiles_only = False
+explosive_k = 3
+selection = np.argmin
 
 # do not set theta to 0 or the rigidity calculation will not work
 theta = np.pi/6
@@ -113,7 +114,7 @@ def main():
         # screen.blit(font.render("steps elapsed: ", 1, THECOLORS["darkgrey"]), (5,5))
 
         if auto:
-            sim.rigidify_random_floppy_tile(k = explosive_k, selection = selection)
+            sim.rigidify_random_floppy_tile(k = explosive_k, selection = selection, select_tiles_only=select_tiles_only)
 
         draw_shapes(screen, sim)
 

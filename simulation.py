@@ -75,27 +75,65 @@ class Simulation(object):
             self.rifts_rigid[i][j] = self.rounds
             self.update_rigidity()
 
-    def rigidify_random_floppy_tile(self, k = 1, selection = np.argmin):
-        floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
-        # print(len(floppy_tiles))
-        # print(np.random.randint(len(floppy_tiles)))
-        kk = k if len(floppy_tiles) >= k else len(floppy_tiles)
-        if len(floppy_tiles) != 0:
-            samples = floppy_tiles[np.random.randint(len(floppy_tiles), size = kk)]
-            
-            samples_results = []
-            for sample in samples:
-                s_tiles = np.copy(self.tiles_rigid)
-                s_tiles[sample[0]][sample[1]] = self.rounds
-                s_rifts = np.copy(self.rifts_rigid)
-                sample_tiles_outcome = self.update_rigidity_helper(s_tiles, s_rifts)[0]
-                samples_results.append(np.count_nonzero(sample_tiles_outcome))
-            
-            sample = samples[selection(samples_results)]
+    def rigidify_random_floppy_tile(self, k = 1, selection = np.argmin, select_tiles_only = True):
 
+        if select_tiles_only:
+            floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
+            kk = min(k, len(floppy_tiles))
+            if kk != 0:
+                samples = floppy_tiles[np.random.randint(len(floppy_tiles), size = kk)]
+                
+                samples_results = []
+                for sample in samples:
+                    s_tiles = np.copy(self.tiles_rigid)
+                    s_tiles[sample[0]][sample[1]] = self.rounds
+                    s_rifts = np.copy(self.rifts_rigid)
+                    sample_tiles_outcome = self.update_rigidity_helper(s_tiles, s_rifts)[0]
+                    samples_results.append(np.count_nonzero(sample_tiles_outcome))
+                
+                sample = samples[selection(samples_results)]
+
+                self.rounds += 1
+                self.tiles_rigid[sample[0]][sample[1]] = self.rounds
+                self.update_rigidity()
+
+        else:
+            floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
+            floppy_rifts = np.array(np.where(self.rifts_rigid == 0)).T
+            kk = min(k, len(floppy_tiles) + len(floppy_rifts))
+            if kk != 0:
+                sample_ids = np.random.randint(len(floppy_tiles) + len(floppy_rifts), size = kk)
+                samples_results = []
+
+                for sample_id in sample_ids:
+                    s_tiles = np.copy(self.tiles_rigid)
+                    s_rifts = np.copy(self.rifts_rigid)
+                    if sample_id < len(floppy_tiles): # take from tiles
+                        sample = floppy_tiles[sample_id] # convert sample id into coordinate of tile to rigidify
+                        s_tiles[sample[0]][sample[1]] = self.rounds
+                        sample_tiles_outcome = self.update_rigidity_helper(s_tiles, s_rifts)
+                        samples_results.append(np.count_nonzero(sample_tiles_outcome[0]) + np.count_nonzero(sample_tiles_outcome[1]))
+
+                    else: # sample from floppy rifts
+                        sample = floppy_rifts[sample_id - len(floppy_tiles)]
+                        s_rifts[sample[0]][sample[1]] = self.rounds
+                        sample_rifts_outcome = self.update_rigidity_helper(s_tiles, s_rifts)
+                        samples_results.append(np.count_nonzero(sample_rifts_outcome[0]) + np.count_nonzero(sample_rifts_outcome[1]))
+            # print(samples_results)
+            sample_id = sample_ids[selection(samples_results)]
+            # print(sample_id) # with bug this is always 0, so the first floppy tile
             self.rounds += 1
-            self.tiles_rigid[sample[0]][sample[1]] = self.rounds
-            self.update_rigidity()
+            if sample_id < len(floppy_tiles):
+                sample = floppy_tiles[sample_id]
+                self.tiles_rigid[sample[0]][sample[1]] = self.rounds
+                self.update_rigidity()
+
+            else:
+                sample = floppy_rifts[sample_id - len(floppy_tiles)]
+                self.rifts_rigid[sample[0]][sample[1]] = self.rounds
+                self.update_rigidity()
+
+
 
 
 
@@ -133,7 +171,8 @@ class Simulation(object):
             # if we know the locations of colored tiles, not only if they're rigid or not
             if self.learn_locations:
                 # iterate through tiles and rifts; if any x now have 2 neighbors known, x is rigid now too
-                # ignore outer border for both b/c those won't get fixed
+                # ignore outer border for both b/c those won't get fixed (not diagonally, and two adjacent neighbors would have already fixed them in the vertices part)
+                # use range (L - 1) b/c for checking rifts, there are only L - 1 rows to check, and for checking tiles,  
                 for i in range(self.rows - 1):
                     for j in range(self.cols - 1):
                         if i >= 1 and j >= 1:
@@ -143,13 +182,14 @@ class Simulation(object):
                                 # if >=3 neighbors are rigid or the two rigid neighbors are adjacent... wait this is not well defined
 
                                 # ADD / REMOVE TRUE DIAGONALS
+                                # if the initial True clause is removed, this only rigidifies the tile if there are more than 2 rigid neighbors, 
+                                # or if there are exactly 2 rigid neighbors that are ADJACENT (touching at some vertex)
                                 if True or np.sum(rigid_neighbors) > 2 or np.sum(np.multiply(np.array(neighboring_rifts), np.array([rigid_neighbors]).T)) % 2 == 1:
                                     changed = True
                                     new_tiles[i][j] = self.rounds
                                     # print(self.tiles_rigid)
                                     # print(i,j)
 
-                        # if i < rows - 1 and j < cols - 1:
                         neighboring_tiles = [[i,j], [i+1, j], [i+1, j+1], [i,j+1]]
                         rigid_neighbors = [new_tiles[n[0]][n[1]] > 0 for n in neighboring_tiles]
                         if new_rifts[i][j] == 0 and np.sum(rigid_neighbors) >= 2:
