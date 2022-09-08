@@ -27,8 +27,13 @@ class Simulation(object):
         self.y_offset = (h - cols * (self.r1 + self.r2)) / 2
 
         # 0 = flexible, integer value k = became rigid in round k
+        # these two arrays store both explicitly and implicitly rigidified tiles and holes
         self.tiles_rigid = np.zeros([rows, cols])
         self.rifts_rigid = np.zeros([rows - 1, cols - 1])
+
+        # store only tiles/holes explicitly made rigid
+        self.tiles_rigid_explicit = np.zeros([rows, cols])
+        self.rifts_rigid_explicit = np.zeros([rows - 1, cols - 1])
 
         self.all_tile_vertices = []
         for i in range(rows):
@@ -61,45 +66,59 @@ class Simulation(object):
     def reset(self):
         self.tiles_rigid = np.zeros([self.rows, self.cols])
         self.rifts_rigid = np.zeros([self.rows - 1, self.cols - 1])
+        self.tiles_rigid_explicit = np.zeros([self.rows, self.cols])
+        self.rifts_rigid_explicit = np.zeros([self.rows - 1, self.cols - 1])
         self.rounds = 0
 
     def tile_onclick(self, i,j):
-        if self.tiles_rigid[i][j] == 0:
+        if self.tiles_rigid_explicit[i][j] == 0:
             self.rounds += 1
+            self.tiles_rigid_explicit[i][j] = self.rounds
             self.tiles_rigid[i][j] = self.rounds
             self.update_rigidity()
 
     def rift_onclick(self, i,j):
-        if self.rifts_rigid[i][j] == 0:
+        if self.rifts_rigid_explicit[i][j] == 0:
             self.rounds += 1
+            self.rifts_rigid_explicit[i][j] = self.rounds
             self.rifts_rigid[i][j] = self.rounds
             self.update_rigidity()
 
-    def rigidify_random_floppy_tile(self, k = 1, selection = np.argmin, select_tiles_only = True):
+    def rigidify_random_floppy_tile(self, k = 1, selection = np.argmin, select_tiles_only = True, can_select_implicitly_rigid = True):
 
         if select_tiles_only:
-            floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
+            if can_select_implicitly_rigid: # do not select from tiles that have been explicitly rigidified
+                floppy_tiles = np.array(np.where(self.tiles_rigid_explicit == 0)).T
+            else: # do not select from tiles that have been explicitly or implicitly rigidified
+                floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
+
             kk = min(k, len(floppy_tiles))
             if kk != 0:
                 samples = floppy_tiles[np.random.randint(len(floppy_tiles), size = kk)]
-                
+                    
                 samples_results = []
                 for sample in samples:
                     s_tiles = np.copy(self.tiles_rigid)
                     s_tiles[sample[0]][sample[1]] = self.rounds
                     s_rifts = np.copy(self.rifts_rigid)
-                    sample_tiles_outcome = self.update_rigidity_helper(s_tiles, s_rifts)[0]
-                    samples_results.append(np.count_nonzero(sample_tiles_outcome))
+                    sample_tiles_outcome = self.update_rigidity_helper(s_tiles, s_rifts)
+                    samples_results.append(np.count_nonzero(sample_tiles_outcome[0]) + np.count_nonzero(sample_tiles_outcome[1]))
                 
                 sample = samples[selection(samples_results)]
 
                 self.rounds += 1
+                self.tiles_rigid_explicit[sample[0]][sample[1]] = self.rounds
                 self.tiles_rigid[sample[0]][sample[1]] = self.rounds
                 self.update_rigidity()
 
         else:
-            floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
-            floppy_rifts = np.array(np.where(self.rifts_rigid == 0)).T
+            if can_select_implicitly_rigid: # do not select from tiles/rifts that have been explicitly rigidified
+                floppy_tiles = np.array(np.where(self.tiles_rigid_explicit == 0)).T
+                floppy_rifts = np.array(np.where(self.rifts_rigid_explicit == 0)).T
+            else: # do not select from tiles that have been explicitly or implicitly rigidified
+                floppy_tiles = np.array(np.where(self.tiles_rigid == 0)).T
+                floppy_rifts = np.array(np.where(self.rifts_rigid == 0)).T
+
             kk = min(k, len(floppy_tiles) + len(floppy_rifts))
             if kk != 0:
                 sample_ids = np.random.randint(len(floppy_tiles) + len(floppy_rifts), size = kk)
@@ -120,16 +139,18 @@ class Simulation(object):
                         sample_rifts_outcome = self.update_rigidity_helper(s_tiles, s_rifts)
                         samples_results.append(np.count_nonzero(sample_rifts_outcome[0]) + np.count_nonzero(sample_rifts_outcome[1]))
             # print(samples_results)
-            sample_id = sample_ids[selection(samples_results)]
-            # print(sample_id) # with bug this is always 0, so the first floppy tile
+            sample_id = sample_ids[selection(samples_results)] # these were already sampled in a random order using randint
+            # print(sample_id) 
             self.rounds += 1
             if sample_id < len(floppy_tiles):
                 sample = floppy_tiles[sample_id]
+                self.tiles_rigid_explicit[sample[0]][sample[1]] = self.rounds
                 self.tiles_rigid[sample[0]][sample[1]] = self.rounds
                 self.update_rigidity()
 
             else:
                 sample = floppy_rifts[sample_id - len(floppy_tiles)]
+                self.rifts_rigid_explicit[sample[0]][sample[1]] = self.rounds
                 self.rifts_rigid[sample[0]][sample[1]] = self.rounds
                 self.update_rigidity()
 
@@ -172,7 +193,8 @@ class Simulation(object):
             if self.learn_locations:
                 # iterate through tiles and rifts; if any x now have 2 neighbors known, x is rigid now too
                 # ignore outer border for both b/c those won't get fixed (not diagonally, and two adjacent neighbors would have already fixed them in the vertices part)
-                # use range (L - 1) b/c for checking rifts, there are only L - 1 rows to check, and for checking tiles,  
+                # use range (L - 1). we don't check the (L-1)th row/col of rifts because there are only L - 1 rows/cols to check (0-indexed), 
+                # and the case where a tile in the last row needs to be rigidified is accounted for by running this loop on all non outer-border tiles + applying the earlier angle-based loop afterward.
                 for i in range(self.rows - 1):
                     for j in range(self.cols - 1):
                         if i >= 1 and j >= 1:
