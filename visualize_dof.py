@@ -10,7 +10,7 @@ from matplotlib import cm
 from simulation import Simulation
 
 
-auto = False # automatically rigidify tiles
+auto = True # automatically rigidify tiles
 
 DISPLAY_SIZE = (500,500)
 w,h = DISPLAY_SIZE
@@ -20,12 +20,14 @@ cols = 15
 s = 15
 
 learn_locations = True
-select_tiles_only = False
-explosive_k = 3
+select_tiles_only = True
+explosive_k = 25
 selection = np.argmin
+can_select_implicitly_rigid = True
 
 # do not set theta to 0 or the rigidity calculation will not work
 theta = np.pi/6
+fps = 15
 
 
 def draw_shapes(screen, sim):
@@ -111,14 +113,15 @@ def main():
                                 # print(sim.rifts_rigid)
 
         screen.fill(THECOLORS["white"]) # clear the screen
-        # screen.blit(font.render("steps elapsed: ", 1, THECOLORS["darkgrey"]), (5,5))
+        if select_tiles_only:
+            pct_rigidified = round(np.count_nonzero(sim.tiles_rigid_explicit) / sim.tiles_rigid_explicit.size, 3)
+            screen.blit(font.render("r: " + str(pct_rigidified), 1, THECOLORS["darkgrey"]), (5,5))
 
         if auto:
-            sim.rigidify_random_floppy_tile(k = explosive_k, selection = selection, select_tiles_only=select_tiles_only)
+            sim.rigidify_random_floppy_tile(k = explosive_k, selection = selection, select_tiles_only=select_tiles_only, can_select_implicitly_rigid=can_select_implicitly_rigid)
 
         draw_shapes(screen, sim)
 
-        fps = 15
         clock.tick(fps)
 
         pygame.display.flip()
