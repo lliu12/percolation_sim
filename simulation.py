@@ -154,18 +154,6 @@ class Simulation(object):
                 self.rifts_rigid[sample[0]][sample[1]] = self.rounds
                 self.update_rigidity()
 
-
-
-
-
-        # if len(floppy_tiles) != 0:
-        #     sample = floppy_tiles[np.random.randint(len(floppy_tiles))]
-        #     assert self.tiles_rigid[sample[0]][sample[1]] == 0
-        #     self.rounds += 1
-        #     self.tiles_rigid[sample[0]][sample[1]] = self.rounds
-        #     self.update_rigidity()
-
-
     def update_rigidity_helper(self, rigid_tiles_array, rigid_rifts_array):
         new_tiles = np.copy(rigid_tiles_array)
         new_rifts = np.copy(rigid_rifts_array)
@@ -173,54 +161,62 @@ class Simulation(object):
         while changed: 
             changed = False
             # iterate through vertices; if any vertex with 4 angles meeting now has 3 known, the 4th becomes rigid too
-            for coord, vertices in self.all_vertices.items():
-                count_rigid = 0
-                for v in vertices:
-                    if v[0] == "tile" and new_tiles[v[1]][v[2]] > 0:
-                        count_rigid += 1
-                    elif v[0] == "rift" and new_rifts[v[1]][v[2]] > 0:
-                        count_rigid += 1
-
-                if len(vertices) == 4 and count_rigid == 3: # account for boundary nodes where there may not be 4 complete rifts/tiles meeting
-                    changed = True
+            if not self.learn_locations:
+                for coord, vertices in self.all_vertices.items():
+                    count_rigid = 0
                     for v in vertices:
-                        if v[0] == "tile" and new_tiles[v[1]][v[2]] == 0:
-                            new_tiles[v[1]][v[2]] = self.rounds
-                        elif v[0] == "rift" and new_rifts[v[1]][v[2]] == 0:
-                            new_rifts[v[1]][v[2]] = self.rounds
+                        if v[0] == "tile" and new_tiles[v[1]][v[2]] > 0:
+                            count_rigid += 1
+                        elif v[0] == "rift" and new_rifts[v[1]][v[2]] > 0:
+                            count_rigid += 1
+
+                    if len(vertices) == 4 and count_rigid == 3: # account for boundary nodes where there may not be 4 complete rifts/tiles meeting
+                        changed = True
+                        for v in vertices:
+                            if v[0] == "tile" and new_tiles[v[1]][v[2]] == 0:
+                                new_tiles[v[1]][v[2]] = self.rounds
+                            elif v[0] == "rift" and new_rifts[v[1]][v[2]] == 0:
+                                new_rifts[v[1]][v[2]] = self.rounds
 
             # if we know the locations of colored tiles, not only if they're rigid or not
+            # now, if any component X has 3+ vertices which are fixed (because another component with a vertex in the same position is fixed), X becomes fixed
             if self.learn_locations:
-                # iterate through tiles and rifts; if any x now have 2 neighbors known, x is rigid now too
-                # ignore outer border for both b/c those won't get fixed (not diagonally, and two adjacent neighbors would have already fixed them in the vertices part)
-                # use range (L - 1). we don't check the (L-1)th row/col of rifts because there are only L - 1 rows/cols to check (0-indexed), 
-                # and the case where a tile in the last row needs to be rigidified is accounted for by running this loop on all non outer-border tiles + applying the earlier angle-based loop afterward.
-                for i in range(self.rows - 1):
-                    for j in range(self.cols - 1):
-                        if i >= 1 and j >= 1:
-                            neighboring_rifts = [[i-1, j-1], [i-1, j], [i,j], [i, j-1]]
-                            rigid_neighbors = [new_rifts[n[0]][n[1]] > 0 for n in neighboring_rifts]
-                            if new_tiles[i][j] == 0 and np.sum(rigid_neighbors) >= 2:
-                                # if >=3 neighbors are rigid or the two rigid neighbors are adjacent... wait this is not well defined
+                memoize_coord_rigidity = {} # save and look up whether a vertex is rigid
+                for i in range(self.rows):
+                    for j in range(self.cols):
+                        # for tiles
+                        if new_tiles[i][j] == 0:
+                            vertices = self.all_tile_vertices[i][j]
+                            if sum([self.is_vertex_fixed(tuple(v), new_tiles, new_rifts, memoize_coord_rigidity) for v in vertices]) >= 3:
+                                changed = True
+                                new_tiles[i][j] = self.rounds
 
-                                # ADD / REMOVE TRUE DIAGONALS
-                                # if the initial True clause is removed, this only rigidifies the tile if there are more than 2 rigid neighbors, 
-                                # or if there are exactly 2 rigid neighbors that are ADJACENT (touching at some vertex)
-                                if True or np.sum(rigid_neighbors) > 2 or np.sum(np.multiply(np.array(neighboring_rifts), np.array([rigid_neighbors]).T)) % 2 == 1:
-                                    changed = True
-                                    new_tiles[i][j] = self.rounds
-                                    # print(self.tiles_rigid)
-                                    # print(i,j)
-
-                        neighboring_tiles = [[i,j], [i+1, j], [i+1, j+1], [i,j+1]]
-                        rigid_neighbors = [new_tiles[n[0]][n[1]] > 0 for n in neighboring_tiles]
-                        if new_rifts[i][j] == 0 and np.sum(rigid_neighbors) >= 2:
-                            if True or np.sum(rigid_neighbors) > 2 or np.sum(np.multiply(np.array(neighboring_tiles), np.array([rigid_neighbors]).T)) % 2 == 1:
+                        # for rifts
+                        if i < self.rows - 1 and j < self.cols - 1 and new_rifts[i][j] == 0:
+                            vertices = self.all_rift_vertices[i][j]
+                            if sum([self.is_vertex_fixed(tuple(v), new_tiles, new_rifts, memoize_coord_rigidity) for v in vertices]) >= 3:
                                 changed = True
                                 new_rifts[i][j] = self.rounds
-                                # print(i,j)
 
         return new_tiles, new_rifts
+
+    # see if any components with a vertex at these coordinates are rigid
+    def is_vertex_fixed(self, coords, new_tiles, new_rifts, memoize_coord_rigidity):
+        if coords in memoize_coord_rigidity:
+            return memoize_coord_rigidity[coords]
+        else: 
+            vertices_at_coords = self.all_vertices[coords]
+            for v in vertices_at_coords:
+                if v[0] == "tile" and new_tiles[v[1]][v[2]] > 0:
+                    memoize_coord_rigidity[coords] = True
+                    return True
+                elif v[0] == "rift" and new_rifts[v[1]][v[2]] > 0:
+                    memoize_coord_rigidity[coords] = True
+                    return True
+            memoize_coord_rigidity[coords] = False
+            return False
+
+
 
 
     def update_rigidity(self):
