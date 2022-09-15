@@ -56,7 +56,10 @@ for rule = rule_all
             r = M(idm,3);
             
             % probability of getting a rigid pattern
-            P = M(idm,9);
+            P = M(idm,10);
+            
+            % probability of getting a nearly rigid pattern (up to 4 floppy tiles)
+%             P = M(idm,11);
             
             plot(r,P,'Color',cmap(id,:),'LineWidth',3);
         end
@@ -130,7 +133,7 @@ for rule = rule_all
             r = M(idm,3);
             
             % probability of getting a rigid pattern
-            P = M(idm,9);
+            P = M(idm,10);
             
             N_max = L^2;
 
@@ -150,7 +153,7 @@ for rule = rule_all
                     if k == 1
                         opt = 1/2;
                     else
-                        opt = (1+P(round(length(P)*0.8)))/2;
+                        opt = (1+mode(P))/2;
                     end
 
                     [id_temp] = find(P==opt);
