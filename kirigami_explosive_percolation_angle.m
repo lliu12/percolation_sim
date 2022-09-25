@@ -9,9 +9,8 @@
 % G. P. T. Choi, L. Liu, L. Mahadevan, "Explosive rigidity perolcation in
 % kirigami", preprint, 2022.
 % 
-% Copyright (c) 2022,  Gary P. T. Choi, L. Liu, L. Mahadevan
+% Copyright (c) 2022, Gary P. T. Choi, L. Liu, L. Mahadevan
 
-mkdir('result_angle');
 addpath('result_angle');
 
 %% Setup
@@ -198,6 +197,9 @@ for rule = rule_all
             
             % probability of getting a rigid pattern
             P = sum([zeros(1,n_sim);N_rigid_all]==N_max,2)/n_sim;
+
+            % probability of getting a nearly rigid pattern (up to 4 floppy components)
+%             P = sum([zeros(1,n_sim);N_rigid_all]>=N_max-4,2)/n_sim;
             
             plot(r,P,'Color',cmap(id,:),'LineWidth',3);
 
@@ -303,26 +305,36 @@ L = 20;
 id = find(L_all == L);
 
 % Rule 1, lower bound = (4*L-3)/(L^2+(L-1)^2)
+e_all = rc1_all(id,:)-(4*L-3)/(L^2+(L-1)^2);
 figure;
-plot(log(k_all),log(rc1_all(id,:)-(4*L-3)/(L^2+(L-1)^2)),'o',...
-    'MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255);
-lsline
-xlabel('log k');
-ylabel('log (r_c - r_{min})');
-title('Rule 1');
-set(gca,'FontSize',16);
+loglog(k_all,e_all,'o','MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255,'MarkerSize',8);
+hold on;
+b = polyfit(log(k_all), log(e_all), 1);
+fit = exp(b(2)).*[k_all,100].^b(1);
+plot([k_all,100], fit, '-','Color',[201,0,22]/255)
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
+xlim([0 100])
+ylim([0.01 1])
+xticks(10.^(0:2));
+yticks(10.^(-2:0));
+xlabel('k');
+ylabel('r_c - r_{min}');
+title('Rule 1');
 
 % Rule 2, upper bound = 1
 figure;
-plot(log(k_all),log(1-rc2_all(id,:)),'o','MarkerFaceColor',[201 0 22]/255,...
-    'Color',[201,0,22]/255);
-xlabel('log k');
-ylabel('log (1-r_c)');
-title('Rule 2');
-set(gca,'FontSize',16);
+loglog((k_all), (1-rc2_all(id,:)),'o','MarkerFaceColor',[201,0,22]/255,...
+    'Color',[201,0,22]/255,'MarkerSize',8);
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
-
+xlim([0 100])
+ylim([0.00025 1])
+xticks(10.^(0:2));
+yticks(10.^(-3:0));
+xlabel('k');
+ylabel('1 - r_c');
+title('Rule 2');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Save the simulation results

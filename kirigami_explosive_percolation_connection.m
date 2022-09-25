@@ -7,10 +7,8 @@
 % G. P. T. Choi, L. Liu, L. Mahadevan, "Explosive rigidity perolcation in
 % kirigami", preprint, 2022.
 % 
-% Copyright (c) 2022,  Gary P. T. Choi, L. Liu, L. Mahadevan
+% Copyright (c) 2022, Gary P. T. Choi, L. Liu, L. Mahadevan
 
-
-mkdir('result_connection');
 addpath('result_connection');
 
 %% Setup
@@ -318,26 +316,37 @@ L = 20;
 id = find(L_all == L);
 
 % Rule 1, lower bound = ceil((3*L^2-3)/2)/(4*L*(L-1))
+e_all = rc1_all(4,:)-ceil((3*L^2-3)/2)/(4*L*(L-1));
 figure;
-plot(log(k_all),log(rc1_all(4,:)-ceil((3*L^2-3)/2)/(4*L*(L-1))),'o',...
-    'MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255);
-lsline
-xlabel('log k');
-ylabel('log (r_c - r_{min})');
-title('Rule 1');
-set(gca,'FontSize',16);
+loglog(k_all,e_all,'o','MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255,'MarkerSize',8);
+hold on;
+b = polyfit(log(k_all), log(e_all), 1);
+fit = exp(b(2)).*[k_all,100].^b(1);
+plot([k_all,100], fit, '-','Color',[201,0,22]/255)
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
+xlim([0 100])
+ylim([0.01 1])
+xticks(10.^(0:2));
+yticks(10.^(-2:0));
+xlabel('k');
+ylabel('r_c - r_{min}');
+title('Rule 1');
+
 
 % Rule 2, upper bound = 1
 figure;
-plot(log(k_all), log(1-rc2_all(id,:)),'o','MarkerFaceColor',[201,0,22]/255,...
-    'Color',[201,0,22]/255);
-xlabel('log k');
-ylabel('log (1-r_c)');
-title('Rule 2');
-set(gca,'FontSize',16);
+loglog((k_all), (1-rc2_all(id,:)),'o','MarkerFaceColor',[201,0,22]/255,...
+    'Color',[201,0,22]/255,'MarkerSize',8);
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
-
+xlim([0 100])
+ylim([0.00025 1])
+xticks(10.^(0:2));
+yticks(10.^(-3:0));
+xlabel('k');
+ylabel('1 - r_c');
+title('Rule 2');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Save the simulation results

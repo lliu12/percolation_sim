@@ -38,11 +38,14 @@ cmap = lines(length(L_all));
 
 %% Plot r vs P for each rule and each k
 
+r_k1 = cell(length(L_all),1);
+N_k1 = cell(length(L_all),1);
+
 for rule = rule_all
     if rule == 1
-        M = readmatrix('pcts_rigid_grouped_maximize_rigidity.csv');
+        M = readmatrix('max_rigidity/ind_sim_results.csv');
     else
-        M = readmatrix('pcts_rigid_grouped_minimize_rigidity.csv');
+        M = readmatrix('min_rigidity/ind_sim_results.csv');
     end
     
     for k = k_all
@@ -50,16 +53,32 @@ for rule = rule_all
         hold on;
         for L = L_all
             id = find(L_all == L);
-            idm = find(M(:,2) == L & M(:,5) == k);
+            idm = find(M(:,1) == L & M(:,5) == k);
+            N_max = L^2+(L-1)^2;
             
             % percentage of tiles explicitly rigidified
-            r = M(idm,3);
+            r = reshape(M(idm,2),L^2,n_sim);
+            r = r(:,1);
+            
+            % total rigid tile and hole count
+            N = reshape(M(idm,8)+M(idm,9),L^2,n_sim);
+            
+            if k == 1 
+                % for k = 1, no need to distinguish between the two rules
+                if rule == 1
+                    r_k1{id} = r;
+                    N_k1{id} = N;
+                else
+                    r = r_k1{id};
+                    N = N_k1{id};
+                end
+            end
             
             % probability of getting a rigid pattern
-            P = M(idm,10);
-            
-            % probability of getting a nearly rigid pattern (up to 4 floppy tiles)
-%             P = M(idm,11);
+            P = sum(N==N_max,2)/n_sim;
+
+            % probability of getting a nearly rigid pattern (up to 4 floppy components)
+%             P = sum(N>=N_max-4,2)/n_sim;
             
             plot(r,P,'Color',cmap(id,:),'LineWidth',3);
         end
@@ -78,6 +97,8 @@ for rule = rule_all
 end
 
 %% Plot r vs N/N_max for each rule and each k
+r_k1 = cell(length(L_all),1);
+N_k1 = cell(length(L_all),1);
 
 for rule = rule_all
     if rule == 1
@@ -99,6 +120,17 @@ for rule = rule_all
             % total rigid tile and hole count
             N = reshape(M(idm,8)+M(idm,9),L^2,n_sim);
             
+            if k == 1 
+                % for k = 1, no need to distinguish between the two rules
+                if rule == 1
+                    r_k1{id} = r;
+                    N_k1{id} = N;
+                else
+                    r = r_k1{id};
+                    N = N_k1{id};
+                end
+            end
+            
             plot(r,N/N_max,'Color',[cmap(id,:),0.1],'LineWidth',1);
         end
         title(['Rule = ', num2str(rule),', k = ', num2str(k)]);
@@ -110,6 +142,8 @@ for rule = rule_all
 end
 
 %% Find the critical r for different (L, k)
+r_k1 = cell(length(L_all),1);
+P_k1 = cell(length(L_all),1);
 
 rc1_all = zeros(length(L_all),length(k_all)); % critical r for rule 1
 rc2_all = zeros(length(L_all),length(k_all)); % critical r for rule 2
@@ -134,6 +168,17 @@ for rule = rule_all
             
             % probability of getting a rigid pattern
             P = M(idm,10);
+            
+            if k == 1 
+                % for k = 1, no need to distinguish between the two rules
+                if rule == 1
+                    r_k1{id} = r;
+                    P_k1{id} = P;
+                else
+                    r = r_k1{id};
+                    P = P_k1{id};
+                end
+            end
             
             N_max = L^2;
 
@@ -172,26 +217,35 @@ end
 L = 20;
 id = find(L_all == L);
 
-% Rule 1, lower bound = 2L (for even L) or 2L-1 (for odd L)
+% Rule 1, lower bound = 2L/L^2 (for even L) or (2L-1)/L^2 (for odd L)
+e_all = rc1_all(id,:)-(2*L-mod(L,2))/L^2;
 figure;
-plot(log(k_all),log(rc1_all(id,:)-(2*L-mod(L,2))/L^2),'o',...
-    'MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255);
-lsline
-xlabel('log k');
-ylabel('log (r_c - r_{min})');
-title('Rule 1');
-set(gca,'FontSize',16);
+loglog(k_all,e_all,'o','MarkerFaceColor',[201,0,22]/255,'Color',[201,0,22]/255,'MarkerSize',8);
+hold on;
+b = polyfit(log(k_all), log(e_all), 1);
+fit = exp(b(2)).*[k_all,100].^b(1);
+plot([k_all,100], fit, '-','Color',[201,0,22]/255)
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
+xlim([0 100])
+ylim([0.01 1])
+xticks(10.^(0:2));
+yticks(10.^(-2:0));
+xlabel('k');
+ylabel('r_c - r_{min}');
+title('Rule 1');
 
 % Rule 2, upper bound = 1
 figure;
-plot(log(k_all),log(1-rc2_all(id,:)),'o','MarkerFaceColor',[201 0 22]/255,...
-    'Color',[201,0,22]/255);
-xlabel('log k');
-ylabel('log (1-r_c)');
-title('Rule 2');
-ylim([-6 -1.5])
-set(gca,'FontSize',16);
+loglog((k_all), (1-rc2_all(id,:)),'o','MarkerFaceColor',[201,0,22]/255,...
+    'Color',[201,0,22]/255,'MarkerSize',8);
+set(gca,'FontSize',20);
 set(gca,'LineWidth',2);
-
+xlim([0 100])
+ylim([0.00025 1])
+xticks(10.^(0:2));
+yticks(10.^(-3:0));
+xlabel('k');
+ylabel('1 - r_c');
+title('Rule 2');
 
