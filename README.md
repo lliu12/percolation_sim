@@ -8,7 +8,7 @@ Any comments and suggestions are welcome.
 
 If you use this code in your own work, please cite the following paper:
 
-G. P. T. Choi, L. Liu, and L. Mahadevan, "[Explosive rigidity percolation in kirigami.](https://arxiv.org/abs/2211.15073)" Preprint, arXiv:2211.15073, 2022.
+G. P. T. Choi, L. Liu, and L. Mahadevan, "[Explosive rigidity percolation in kirigami.](https://doi.org/10.1098/rspa.2022.0798)" Proceedings of the Royal Society A, 479(2271), 20220798, 2023.
 
 ============================================================
 
